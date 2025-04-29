@@ -16,6 +16,7 @@
 #define SOIL_PIN 34        // Soil sensor analog pin
 #define DHT_PIN 18         // DHT11 signal pin
 #define DHT_TYPE DHT11
+#define RELAY_PIN 19       // Relay control pin for water pump
 
 DHT dht(DHT_PIN, DHT_TYPE);
 BH1750 lightMeter;
@@ -34,7 +35,11 @@ void setup() {
   dht.begin();
   Wire.begin(21, 22);      // SDA, SCL for ESP32
   lightMeter.begin();
-
+  
+  // Initialize relay pin
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, LOW);  // Ensure pump is OFF at startup
+  
   Serial.println("Smart Aloe Doctor is starting...");
   
   // Connect to Wi-Fi
@@ -73,6 +78,9 @@ void loop() {
   //  Light
   float lux = lightMeter.readLightLevel();
 
+  // Pump status variable
+  String pumpStatus = "OFF";
+
   //  Smart doctor Message
   Serial.println("---------------");
   Serial.print("Soil Moisture: "); Serial.print(soilPercent); Serial.println("%");
@@ -81,10 +89,17 @@ void loop() {
 
   if (soilPercent < 15) {
     Serial.println(" Aloe is thirsty! Water it.");
+    digitalWrite(RELAY_PIN, HIGH);  // Turn ON the water pump
+    pumpStatus = "ON";
+    Serial.println(" Water pump activated!");
   } else if (soilPercent > 25) {
     Serial.println(" Soil is too wet. Stop watering!");
+    digitalWrite(RELAY_PIN, LOW);   // Turn OFF the water pump
+    pumpStatus = "OFF";
   } else {
     Serial.println(" Soil moisture is fine.");
+    digitalWrite(RELAY_PIN, LOW);   // Turn OFF the water pump
+    pumpStatus = "OFF";
   }
 
   if (temp < 13) {
@@ -131,6 +146,13 @@ void loop() {
         Serial.println("Light data sent successfully");
       } else {
         Serial.printf("Failed to send light data: %s\n", fbdo.errorReason().c_str());
+      }
+      
+      // Send pump status to Firebase
+      if (Firebase.RTDB.setString(&fbdo, "/plant/pumpStatus", pumpStatus)) {
+        Serial.println("Pump status sent successfully");
+      } else {
+        Serial.printf("Failed to send pump status: %s\n", fbdo.errorReason().c_str());
       }
       
       // Send status messages
